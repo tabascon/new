@@ -497,28 +497,24 @@ function createWorkbookBlob(rows) {
   return new Blob([zipBytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
 
-function downloadXlsx() {
+async function downloadXlsx() {
   syncAdminInputs();
-  const rows = [
-    ["Розділ", "Товар Jabko", "URL Jabko", "Ціна Jabko", "Товар MyGadget", "URL MyGadget", "Ціна MyGadget", "Відхилення"],
-    ...appData.sections.flatMap((section) => section.rows.map((row) => [
-      section.title,
-      row.jabko_name || "",
-      row.jabko_url || "",
-      parsePrice(row.jabko_price_uah) ?? "",
-      row.mygadget_name || "",
-      row.mygadget_url || "",
-      parsePrice(row.mygadget_price_uah) ?? "",
-      parsePrice(deviation(row)) ?? "",
-    ])),
-  ];
-  const blob = createWorkbookBlob(rows);
+  const response = await fetch("/api/download-xlsx", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(appData),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const blob = await response.blob();
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = "price_compare.xlsx";
+  link.style.display = "none";
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(url);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 document.addEventListener("click", async (event) => {
@@ -535,7 +531,13 @@ document.addEventListener("click", async (event) => {
   }
   if (target.id === "save-button") await saveData();
   if (target.id === "refresh-all-button") await refreshRows();
-  if (target.id === "download-button") downloadXlsx();
+  if (target.id === "download-button") {
+    try {
+      await downloadXlsx();
+    } catch (error) {
+      showNotice(`Не вдалося скачати XLSX: ${error.message}`, true);
+    }
+  }
   if (target.dataset.action === "add-row") addRow(target.dataset.section);
   if (target.dataset.action === "refresh-section") await refreshRows(target.dataset.section);
   if (target.dataset.action === "refresh-row") {
