@@ -53,6 +53,62 @@ function firstMatch(pattern, text) {
   return match ? match[1].replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim() : "";
 }
 
+function decodeHtmlAttribute(value) {
+  return String(value || "")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#34;", '"')
+    .replaceAll("&#039;", "'")
+    .replaceAll("&apos;", "'")
+    .replaceAll("&amp;", "&");
+}
+
+function normalizeUrl(value) {
+  try {
+    return new URL(value).href.replace(/\/$/, "");
+  } catch {
+    return String(value || "").replace(/\/$/, "");
+  }
+}
+
+function tagAttribute(tag, name) {
+  const match = tag.match(new RegExp(`${name}=([\"'])(.*?)\\1`, "is"));
+  return match ? decodeHtmlAttribute(match[2]) : "";
+}
+
+function swatchPrice(swatchText) {
+  let swatch = null;
+  try {
+    swatch = JSON.parse(swatchText);
+  } catch {
+    swatch = null;
+  }
+  const value = swatch?.price_uah_no_currency || swatch?.price_uah || "";
+  return normalizePrice(value);
+}
+
+function parseJabkoSwatchPrice(html, url) {
+  const currentUrl = normalizeUrl(url);
+  const tags = [...html.matchAll(/<a\b[^>]*data-swatch=(["']).*?\1[^>]*>/gis)].map((match) => match[0]);
+  const exact = tags.find((tag) => normalizeUrl(tagAttribute(tag, "href")) === currentUrl);
+  if (exact) {
+    const price = swatchPrice(tagAttribute(exact, "data-swatch"));
+    if (price) return price;
+  }
+
+  const active = tags.find((tag) => /\bactive\b/i.test(tagAttribute(tag, "class")));
+  if (active) {
+    const price = swatchPrice(tagAttribute(active, "data-swatch"));
+    if (price) return price;
+  }
+
+  const anySwatch = [...html.matchAll(/data-swatch=(["'])(.*?)\1/gis)];
+  for (const item of anySwatch) {
+    const price = swatchPrice(decodeHtmlAttribute(item[2]));
+    if (price) return price;
+  }
+  return "";
+}
+
 async function fetchHtml(url) {
   const response = await fetch(url, {
     headers: {
@@ -69,16 +125,8 @@ export async function parseJabkoPrice(url) {
   if (!url) return "";
   if (!url.includes("jabko.ua")) throw new Error("URL не з jabko.ua");
   const html = await fetchHtml(url);
-  const exactHref = url.replace(/\/$/, "");
-  const swatches = [...html.matchAll(/data-swatch=(["'])(.*?)\1/gis)];
-  for (const item of swatches) {
-    const decoded = item[2].replaceAll("&quot;", '"').replaceAll("&#34;", '"');
-    if (!decoded.includes(exactHref)) continue;
-    const price = normalizePrice(firstMatch(/["']price_uah_no_currency["']\s*:\s*["']?([^"',}]+)/i, decoded));
-    if (price) return price;
-  }
   return (
-    normalizePrice(firstMatch(/["']price["']\s*:\s*["']?([^"',}]+)/i, html)) ||
+    parseJabkoSwatchPrice(html, url) ||
     normalizePrice(firstMatch(/class=["'][^"']*price-new__uah[^"']*["'][^>]*>(.*?)<\/span>/is, html)) ||
     normalizePrice(firstMatch(/data-price=["']([^"']+)/i, html))
   );
