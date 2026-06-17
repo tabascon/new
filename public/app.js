@@ -220,6 +220,9 @@ function setProgress(done, total, message) {
 }
 
 async function api(path, payload) {
+  if (typeof fetch === "undefined") {
+    return xhrJson(path, payload);
+  }
   const response = await fetch(path, {
     method: payload ? "POST" : "GET",
     headers: payload ? { "Content-Type": "application/json" } : {},
@@ -229,11 +232,51 @@ async function api(path, payload) {
   return response.json();
 }
 
+function xhrJson(path, payload) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(payload ? "POST" : "GET", path);
+    request.setRequestHeader("cache-control", "no-store");
+    if (payload) request.setRequestHeader("content-type", "application/json");
+    request.onload = () => {
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(request.responseText || `HTTP ${request.status}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(request.responseText));
+      } catch (error) {
+        reject(error);
+      }
+    };
+    request.onerror = () => reject(new Error("Network error"));
+    request.send(payload ? JSON.stringify(payload) : undefined);
+  });
+}
+
+function xhrBlob(path, payload) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open(payload ? "POST" : "GET", path);
+    request.responseType = "blob";
+    if (payload) request.setRequestHeader("content-type", "application/json");
+    request.onload = () => {
+      if (request.status < 200 || request.status >= 300) {
+        reject(new Error(`HTTP ${request.status}`));
+        return;
+      }
+      resolve(request.response);
+    };
+    request.onerror = () => reject(new Error("Network error"));
+    request.send(payload ? JSON.stringify(payload) : undefined);
+  });
+}
+
 async function loadData() {
   try {
     appData = await api("/api/data");
   } catch {
-    appData = await fetch("/initial-data.json").then((response) => response.json());
+    appData = await api("/initial-data.json");
   }
   render();
 }
@@ -499,13 +542,18 @@ function createWorkbookBlob(rows) {
 
 async function downloadXlsx() {
   syncAdminInputs();
-  const response = await fetch("/api/download-xlsx", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(appData),
-  });
-  if (!response.ok) throw new Error(await response.text());
-  const blob = await response.blob();
+  let blob;
+  if (typeof fetch === "undefined") {
+    blob = await xhrBlob("/api/download-xlsx", appData);
+  } else {
+    const response = await fetch("/api/download-xlsx", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(appData),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    blob = await response.blob();
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
