@@ -1,9 +1,19 @@
 const DATA_KEY = "price_compare_data";
 
+export function isValidPriceData(data) {
+  if (!data || !Array.isArray(data.sections) || data.sections.length === 0) return false;
+  return data.sections.every((section) => (
+    section &&
+    typeof section.key === "string" &&
+    typeof section.title === "string" &&
+    Array.isArray(section.rows)
+  ));
+}
+
 export async function loadData(env, request) {
   if (env.PRICE_DATA) {
     const saved = await env.PRICE_DATA.get(DATA_KEY, "json");
-    if (saved) return saved;
+    if (isValidPriceData(saved)) return saved;
   }
   const assetUrl = new URL("/initial-data.json", request.url);
   const response = await env.ASSETS.fetch(new Request(assetUrl));
@@ -13,6 +23,9 @@ export async function loadData(env, request) {
 export async function saveData(env, data) {
   if (!env.PRICE_DATA) {
     throw new Error("KV binding PRICE_DATA is not configured");
+  }
+  if (!isValidPriceData(data)) {
+    throw new Error("Invalid price table data");
   }
   await env.PRICE_DATA.put(DATA_KEY, JSON.stringify(data));
 }
