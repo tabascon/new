@@ -8,7 +8,7 @@ const FIELD_NAMES = [
 ];
 
 let appData = { sections: [] };
-let mode = "table";
+let mode = window.location.pathname === "/admin" ? "admin" : "table";
 
 const qs = (selector) => document.querySelector(selector);
 
@@ -306,8 +306,16 @@ function downloadCsv() {
 
 document.addEventListener("click", async (event) => {
   const target = event.target;
-  if (target.id === "view-table") { mode = "table"; render(); }
-  if (target.id === "view-admin") { mode = "admin"; render(); }
+  if (target.id === "view-table") {
+    mode = "table";
+    window.history.pushState({}, "", "/");
+    render();
+  }
+  if (target.id === "view-admin") {
+    mode = "admin";
+    window.history.pushState({}, "", "/admin");
+    render();
+  }
   if (target.id === "save-button") await saveData();
   if (target.id === "refresh-all-button") await refreshRows();
   if (target.id === "download-button") downloadCsv();
@@ -325,4 +333,3 @@ document.addEventListener("click", async (event) => {
 });
 
 loadData();
-
