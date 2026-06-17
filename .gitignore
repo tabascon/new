@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.DS_Store
+site_edit_backup.csv
+*_backup_*.csv
+site_server.log
+
