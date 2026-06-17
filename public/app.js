@@ -198,8 +198,6 @@ function render() {
   qs("#save-button").classList.toggle("hidden", !isAdmin);
   qs("#refresh-all-button").classList.toggle("hidden", !isAdmin);
   qs("#sections").innerHTML = appData.sections.map((section, index) => renderSection(section, index === 0, isAdmin)).join("");
-  qs("#view-table").classList.toggle("active", !isAdmin);
-  qs("#view-admin").classList.toggle("active", isAdmin);
   applyTableTools();
 }
 
@@ -567,16 +565,6 @@ async function downloadXlsx() {
 
 document.addEventListener("click", async (event) => {
   const target = event.target;
-  if (target.id === "view-table") {
-    mode = "table";
-    window.history.pushState({}, "", "/");
-    render();
-  }
-  if (target.id === "view-admin") {
-    mode = "admin";
-    window.history.pushState({}, "", "/admin");
-    render();
-  }
   if (target.id === "save-button") await saveData();
   if (target.id === "refresh-all-button") await refreshRows();
   if (target.id === "download-button") {
