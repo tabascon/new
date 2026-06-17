@@ -38,6 +38,15 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+function escapeXml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;");
+}
+
 function linkedName(name, url) {
   if (!name) return '<span class="muted">-</span>';
   if (!url) return escapeHtml(name);
@@ -287,19 +296,205 @@ function addRow(sectionKey) {
   render();
 }
 
-function downloadCsv() {
+const CRC_TABLE = (() => {
+  const table = [];
+  for (let n = 0; n < 256; n += 1) {
+    let c = n;
+    for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    table[n] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(bytes) {
+  let crc = 0xffffffff;
+  for (const byte of bytes) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function dosDateTime(date = new Date()) {
+  const time = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const day = Math.max(1, date.getDate());
+  const dosDate = ((date.getFullYear() - 1980) << 9) | ((date.getMonth() + 1) << 5) | day;
+  return { time, date: dosDate };
+}
+
+function pushU16(out, value) {
+  out.push(value & 0xff, (value >>> 8) & 0xff);
+}
+
+function pushU32(out, value) {
+  out.push(value & 0xff, (value >>> 8) & 0xff, (value >>> 16) & 0xff, (value >>> 24) & 0xff);
+}
+
+function createZip(files) {
+  const encoder = new TextEncoder();
+  const out = [];
+  const central = [];
+  const now = dosDateTime();
+  let offset = 0;
+
+  files.forEach((file) => {
+    const nameBytes = encoder.encode(file.name);
+    const data = typeof file.content === "string" ? encoder.encode(file.content) : file.content;
+    const crc = crc32(data);
+    const local = [];
+    pushU32(local, 0x04034b50);
+    pushU16(local, 20);
+    pushU16(local, 0);
+    pushU16(local, 0);
+    pushU16(local, now.time);
+    pushU16(local, now.date);
+    pushU32(local, crc);
+    pushU32(local, data.length);
+    pushU32(local, data.length);
+    pushU16(local, nameBytes.length);
+    pushU16(local, 0);
+    out.push(...local, ...nameBytes, ...data);
+
+    const entry = [];
+    pushU32(entry, 0x02014b50);
+    pushU16(entry, 20);
+    pushU16(entry, 20);
+    pushU16(entry, 0);
+    pushU16(entry, 0);
+    pushU16(entry, now.time);
+    pushU16(entry, now.date);
+    pushU32(entry, crc);
+    pushU32(entry, data.length);
+    pushU32(entry, data.length);
+    pushU16(entry, nameBytes.length);
+    pushU16(entry, 0);
+    pushU16(entry, 0);
+    pushU16(entry, 0);
+    pushU16(entry, 0);
+    pushU32(entry, 0);
+    pushU32(entry, offset);
+    central.push(...entry, ...nameBytes);
+    offset = out.length;
+  });
+
+  const centralOffset = out.length;
+  out.push(...central);
+  const end = [];
+  pushU32(end, 0x06054b50);
+  pushU16(end, 0);
+  pushU16(end, 0);
+  pushU16(end, files.length);
+  pushU16(end, files.length);
+  pushU32(end, central.length);
+  pushU32(end, centralOffset);
+  pushU16(end, 0);
+  out.push(...end);
+  return new Uint8Array(out);
+}
+
+function columnName(index) {
+  let name = "";
+  let n = index + 1;
+  while (n > 0) {
+    n -= 1;
+    name = String.fromCharCode(65 + (n % 26)) + name;
+    n = Math.floor(n / 26);
+  }
+  return name;
+}
+
+function sheetCell(value, rowIndex, columnIndex, style = "") {
+  const ref = `${columnName(columnIndex)}${rowIndex + 1}`;
+  const styleAttr = style ? ` s="${style}"` : "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return `<c r="${ref}"${styleAttr}><v>${value}</v></c>`;
+  }
+  return `<c r="${ref}" t="inlineStr"${styleAttr}><is><t>${escapeXml(value)}</t></is></c>`;
+}
+
+function buildSheetXml(rows) {
+  const columnWidths = [18, 48, 52, 15, 48, 52, 15, 15];
+  const cols = columnWidths.map((width, index) => `<col min="${index + 1}" max="${index + 1}" width="${width}" customWidth="1"/>`).join("");
+  const sheetRows = rows.map((row, rowIndex) => {
+    const cells = row.map((cell, columnIndex) => sheetCell(cell, rowIndex, columnIndex, rowIndex === 0 ? "1" : ""));
+    return `<row r="${rowIndex + 1}">${cells.join("")}</row>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <cols>${cols}</cols>
+  <sheetData>${sheetRows.join("")}</sheetData>
+</worksheet>`;
+}
+
+function createWorkbookBlob(rows) {
+  const files = [
+    {
+      name: "[Content_Types].xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+  <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+</Types>`,
+    },
+    {
+      name: "_rels/.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    },
+    {
+      name: "xl/workbook.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <sheets><sheet name="Price Compare" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+    },
+    {
+      name: "xl/_rels/workbook.xml.rels",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`,
+    },
+    {
+      name: "xl/styles.xml",
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="2"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font></fonts>
+  <fills count="1"><fill><patternFill patternType="none"/></fill></fills>
+  <borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0"/></cellXfs>
+</styleSheet>`,
+    },
+    { name: "xl/worksheets/sheet1.xml", content: buildSheetXml(rows) },
+  ];
+  const zipBytes = createZip(files);
+  return new Blob([zipBytes], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+}
+
+function downloadXlsx() {
   syncAdminInputs();
-  const rows = appData.sections.flatMap((section) => section.rows.map((row) => ({ section: section.title, ...row, deviation_uah: deviation(row) })));
-  const fields = ["section", ...FIELD_NAMES, "deviation_uah"];
-  const csv = [
-    fields.join(","),
-    ...rows.map((row) => fields.map((field) => `"${String(row[field] || "").replaceAll('"', '""')}"`).join(",")),
-  ].join("\n");
-  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+  const rows = [
+    ["Розділ", "Товар Jabko", "URL Jabko", "Ціна Jabko", "Товар MyGadget", "URL MyGadget", "Ціна MyGadget", "Відхилення"],
+    ...appData.sections.flatMap((section) => section.rows.map((row) => [
+      section.title,
+      row.jabko_name || "",
+      row.jabko_url || "",
+      parsePrice(row.jabko_price_uah) ?? "",
+      row.mygadget_name || "",
+      row.mygadget_url || "",
+      parsePrice(row.mygadget_price_uah) ?? "",
+      parsePrice(deviation(row)) ?? "",
+    ])),
+  ];
+  const blob = createWorkbookBlob(rows);
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "price_compare.csv";
+  link.download = "price_compare.xlsx";
   link.click();
   URL.revokeObjectURL(url);
 }
@@ -318,7 +513,7 @@ document.addEventListener("click", async (event) => {
   }
   if (target.id === "save-button") await saveData();
   if (target.id === "refresh-all-button") await refreshRows();
-  if (target.id === "download-button") downloadCsv();
+  if (target.id === "download-button") downloadXlsx();
   if (target.dataset.action === "add-row") addRow(target.dataset.section);
   if (target.dataset.action === "refresh-section") await refreshRows(target.dataset.section);
   if (target.dataset.action === "refresh-row") {
