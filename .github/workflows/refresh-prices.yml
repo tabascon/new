@@ -23,4 +23,4 @@ jobs:
           PRICE_COMPARE_URL: https://new-4zc.pages.dev
           REFRESH_WORKERS: "6"
           FORCE_REFRESH: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
-        run: python3 scripts/auto_refresh.py
+        run: python3 -u scripts/auto_refresh.py
