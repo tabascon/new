@@ -30,7 +30,12 @@ def request_json(path, payload=None, retries=3):
     headers = {
         "Authorization": auth_header(),
         "Accept": "application/json",
+        "Accept-Language": "uk-UA,uk;q=0.9,en;q=0.8",
         "Cache-Control": "no-store",
+        "User-Agent": (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
+        ),
     }
     if body is not None:
         headers["Content-Type"] = "application/json"
