@@ -43,9 +43,8 @@ function lastUpdateText() {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-  const source = meta.last_updated_source === "automatic" ? "автоматично" : "вручну";
   const errors = Number(meta.last_updated_errors || 0);
-  return `Останнє оновлення: ${formatted} за Києвом · ${source} · помилок: ${errors}`;
+  return `Останнє оновлення: ${formatted} · помилок: ${errors}`;
 }
 
 function escapeHtml(value) {
