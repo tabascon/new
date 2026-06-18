@@ -20,7 +20,7 @@ function parsePrice(value) {
 function deviation(row) {
   const jabko = parsePrice(row.jabko_price_uah);
   const mygadget = parsePrice(row.mygadget_price_uah);
-  if (jabko === null || mygadget === null) return "";
+  if (jabko === null || mygadget === null || jabko <= 0 || mygadget <= 0) return "";
   return mygadget - jabko;
 }
 
