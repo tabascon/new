@@ -2,7 +2,7 @@ name: Refresh all prices
 
 on:
   schedule:
-    - cron: "5,35 * * * *"
+    - cron: "0,30 * * * *"
   workflow_dispatch:
 
 concurrency:
@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Refresh prices at 12:00 and 17:00 Kyiv time
         env:
