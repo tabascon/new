@@ -61,6 +61,12 @@ a:hover { text-decoration: underline; }
 }
 h1 { margin: 0; font-size: 24px; line-height: 1.2; }
 .meta, .filter-meta, .progress-detail { color: var(--muted); font-size: 13px; margin-top: 4px; }
+.last-update {
+  color: #44443f;
+  font-size: 13px;
+  font-weight: 650;
+  margin-top: 5px;
+}
 .filter-panel, .progress-panel, .notice {
   background: var(--panel);
   border: 1px solid var(--line);

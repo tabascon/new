@@ -1,0 +1,26 @@
+name: Refresh all prices
+
+on:
+  schedule:
+    - cron: "5,35 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: price-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refresh prices at 12:00 and 17:00 Kyiv time
+        env:
+          ADMIN_USER: ${{ secrets.ADMIN_USER }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          PRICE_COMPARE_URL: https://new-4zc.pages.dev
+          REFRESH_WORKERS: "6"
+          FORCE_REFRESH: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+        run: python3 scripts/auto_refresh.py

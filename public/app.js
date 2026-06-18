@@ -30,6 +30,24 @@ function money(value) {
   return String(value || "").trim() ? `${value} грн` : "";
 }
 
+function lastUpdateText() {
+  const meta = appData.meta || {};
+  if (!meta.last_updated_at) return "Останнє оновлення: ще не виконувалось";
+  const date = new Date(meta.last_updated_at);
+  if (Number.isNaN(date.getTime())) return "Останнє оновлення: час невідомий";
+  const formatted = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kyiv",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+  const source = meta.last_updated_source === "automatic" ? "автоматично" : "вручну";
+  const errors = Number(meta.last_updated_errors || 0);
+  return `Останнє оновлення: ${formatted} за Києвом · ${source} · помилок: ${errors}`;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -195,6 +213,7 @@ function render() {
   const total = appData.sections.reduce((count, section) => count + section.rows.length, 0);
   qs("#page-title").textContent = isAdmin ? "Адмінка" : "Порівняння цін";
   qs("#page-meta").textContent = `${total} рядків у ${appData.sections.length} розділах`;
+  qs("#last-update").textContent = lastUpdateText();
   qs("#save-button").classList.toggle("hidden", !isAdmin);
   qs("#refresh-all-button").classList.toggle("hidden", !isAdmin);
   qs("#sections").innerHTML = appData.sections.map((section, index) => renderSection(section, index === 0, isAdmin)).join("");
@@ -325,6 +344,14 @@ async function refreshRows(sectionKey = "") {
     }
     setProgress(i + 1, rows.length, `${item.section.title}, рядок ${item.index + 1}`);
   }
+  appData.meta = {
+    ...(appData.meta || {}),
+    last_updated_at: new Date().toISOString(),
+    last_updated_source: "manual",
+    last_updated_rows: rows.length,
+    last_updated_prices: updated,
+    last_updated_errors: failed,
+  };
   render();
   await saveData();
   showNotice(`Оновлення завершено. Оновлено цін: ${updated}. Помилок: ${failed}.`, failed > 0);
