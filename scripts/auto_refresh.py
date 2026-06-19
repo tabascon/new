@@ -50,7 +50,7 @@ def request_json(path, payload=None, retries=3):
         try:
             with urlopen(request, timeout=90) as response:
                 return json.loads(response.read().decode())
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as error:
+        except (HTTPError, URLError, TimeoutError, OSError, json.JSONDecodeError) as error:
             last_error = error
             if attempt + 1 < retries:
                 time.sleep(2 ** attempt)
