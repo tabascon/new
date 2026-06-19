@@ -66,17 +66,24 @@ def refresh_item(item):
         return section_index, row_index, None, str(error)
 
 
+def due_slot(now_kyiv):
+    due_hours = [hour for hour in TARGET_HOURS if now_kyiv.hour >= hour]
+    if not due_hours:
+        return None
+    return f"{now_kyiv:%Y-%m-%d}T{max(due_hours):02d}"
+
+
 def main():
     force = os.environ.get("FORCE_REFRESH", "").lower() in {"1", "true", "yes"}
     now_kyiv = datetime.now(KYIV)
-    slot = now_kyiv.strftime("%Y-%m-%dT%H")
+    slot = due_slot(now_kyiv)
 
     data = request_json("/api/data")
     meta = data.setdefault("meta", {})
 
     if not force:
-        if now_kyiv.hour not in TARGET_HOURS:
-            print(f"Skip: Kyiv time is {now_kyiv:%H:%M}, target hours are 12:00 and 17:00.")
+        if slot is None:
+            print(f"Skip: Kyiv time is {now_kyiv:%H:%M}; the first slot is 12:00.")
             return 0
         if meta.get("last_auto_slot") == slot:
             print(f"Skip: slot {slot} was already completed.")
