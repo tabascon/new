@@ -75,7 +75,11 @@ function linkedPrice(value, url) {
   const rate = Number(appData.meta?.usd_rate_uah || 0);
   const price = parsePrice(value);
   const usd = price > 0 && rate > 0
-    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(price / rate)
+    ? new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      maximumFractionDigits: 0,
+    }).format(price / rate)
     : "";
   const content = `<span>${escapeHtml(label)}</span>${usd ? `<span class="price-usd">${escapeHtml(usd)}</span>` : ""}`;
   if (!url) return `<span class="price-stack">${content}</span>`;
