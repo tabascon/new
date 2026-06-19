@@ -72,8 +72,14 @@ function linkedName(name, url) {
 function linkedPrice(value, url) {
   const label = money(value);
   if (!label) return '<span class="muted">-</span>';
-  if (!url) return escapeHtml(label);
-  return `<a class="price-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+  const rate = Number(appData.meta?.usd_rate_uah || 0);
+  const price = parsePrice(value);
+  const usd = price > 0 && rate > 0
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(price / rate)
+    : "";
+  const content = `<span>${escapeHtml(label)}</span>${usd ? `<span class="price-usd">${escapeHtml(usd)}</span>` : ""}`;
+  if (!url) return `<span class="price-stack">${content}</span>`;
+  return `<a class="price-link price-stack" href="${escapeHtml(url)}" target="_blank" rel="noopener">${content}</a>`;
 }
 
 function deviationHtml(row) {
@@ -300,6 +306,15 @@ async function loadData() {
     appData = await api("/initial-data.json");
   }
   render();
+  try {
+    const exchange = await api("/api/exchange-rate");
+    if (Number(exchange.rate) > 0) {
+      appData.meta = { ...(appData.meta || {}), usd_rate_uah: exchange.rate };
+      render();
+    }
+  } catch {
+    // Keep the table usable if MyGadget temporarily does not expose its rate.
+  }
 }
 
 async function saveData() {
@@ -356,6 +371,12 @@ async function refreshRows(sectionKey = "") {
     last_updated_prices: updated,
     last_updated_errors: failed,
   };
+  try {
+    const exchange = await api("/api/exchange-rate");
+    if (Number(exchange.rate) > 0) appData.meta.usd_rate_uah = exchange.rate;
+  } catch {
+    // Preserve the previously saved rate on temporary MyGadget failures.
+  }
   render();
   await saveData();
   showNotice(`Оновлення завершено. Оновлено цін: ${updated}. Помилок: ${failed}.`, failed > 0);

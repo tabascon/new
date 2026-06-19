@@ -127,6 +127,14 @@ def main():
             "last_update_duration_seconds": round(time.monotonic() - started),
         }
     )
+    try:
+        exchange = request_json("/api/exchange-rate")
+        rate = float(exchange.get("rate", 0))
+        if rate > 0:
+            meta["usd_rate_uah"] = f"{rate:.2f}"
+            print(f"MyGadget USD rate: {rate:.2f}")
+    except Exception as error:
+        print(f"Warning: exchange rate was not updated: {error}")
     if not force:
         meta["last_auto_slot"] = slot
 

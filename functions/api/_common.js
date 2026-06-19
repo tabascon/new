@@ -143,6 +143,19 @@ export async function parseMyGadgetPrice(url) {
   );
 }
 
+export async function parseMyGadgetExchangeRate() {
+  const html = await fetchHtml("https://mygadget.ua/");
+  const exchangeText = firstMatch(
+    /<div[^>]+class=["'][^"']*header__row-exchange[^"']*["'][^>]*>(.*?)<\/div>/is,
+    html,
+  );
+  const match = exchangeText.match(/USD\s*([\d]+(?:[.,]\d+)?)/i);
+  if (!match) throw new Error("Курс USD не знайдено");
+  const rate = Number(match[1].replace(",", "."));
+  if (!Number.isFinite(rate) || rate <= 0) throw new Error("Некоректний курс USD");
+  return rate.toFixed(2);
+}
+
 export async function refreshRow(row) {
   const output = { ...row };
   let updated = 0;
