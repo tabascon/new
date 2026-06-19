@@ -146,6 +146,8 @@ tr.filtered-out { display: none; }
 .num { width: 52px; color: var(--muted); text-align: right; }
 .name-col, .url-col { min-width: 280px; }
 .price { font-weight: 750; white-space: nowrap; }
+.price-link { color: inherit; text-decoration: underline; text-decoration-color: #b8b8b1; text-underline-offset: 3px; }
+.price-link:hover { color: var(--accent); text-decoration-color: currentColor; }
 .muted { color: var(--muted); }
 .deviation {
   display: inline-flex;

@@ -70,6 +70,13 @@ function linkedName(name, url) {
   return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(name)}</a>`;
 }
 
+function linkedPrice(value, url) {
+  const label = money(value);
+  if (!label) return '<span class="muted">-</span>';
+  if (!url) return escapeHtml(label);
+  return `<a class="price-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+}
+
 function deviationHtml(row) {
   const value = deviation(row);
   if (value === "") return '<span class="muted">-</span>';
@@ -146,9 +153,8 @@ function publicRow(row, index) {
   return `<tr ${rowAttrs(row, index)}>
     <td class="num">${index + 1}</td>
     <td class="name-col">${linkedName(row.jabko_name, row.jabko_url)}</td>
-    <td class="price">${escapeHtml(money(row.jabko_price_uah))}</td>
-    <td class="name-col">${linkedName(row.mygadget_name, row.mygadget_url)}</td>
-    <td class="price">${escapeHtml(money(row.mygadget_price_uah))}</td>
+    <td class="price">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
+    <td class="price">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
     <td>${deviationHtml(row)}</td>
   </tr>`;
 }
@@ -161,8 +167,8 @@ function adminRow(section, row, index) {
     <td class="url-col"><textarea data-field="jabko_url">${escapeHtml(row.jabko_url)}</textarea></td>
     <td class="name-col"><textarea data-field="mygadget_name">${escapeHtml(row.mygadget_name)}</textarea></td>
     <td class="url-col"><textarea data-field="mygadget_url">${escapeHtml(row.mygadget_url)}</textarea></td>
-    <td class="price" data-price-field="jabko_price_uah">${escapeHtml(money(row.jabko_price_uah))}</td>
-    <td class="price" data-price-field="mygadget_price_uah">${escapeHtml(money(row.mygadget_price_uah))}</td>
+    <td class="price" data-price-field="jabko_price_uah">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
+    <td class="price" data-price-field="mygadget_price_uah">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
     <td data-deviation-cell="1">${deviationHtml(row)}</td>
     <td><button class="button" type="button" data-action="refresh-row">Оновити</button></td>
   </tr>`;
@@ -172,7 +178,7 @@ function renderSection(section, open, isAdmin) {
   const rows = section.rows.map((row, index) => isAdmin ? adminRow(section, row, index) : publicRow(row, index)).join("");
   const head = isAdmin
     ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Ціна Jabko</th><th>Ціна MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
-    : `<tr><th class="num">#</th><th>Товар Jabko</th><th>Ціна Jabko</th><th>Товар MyGadget</th><th>Ціна MyGadget</th><th>Відхилення</th></tr>`;
+    : `<tr><th class="num">#</th><th>Товар Jabko</th><th>Ціна Jabko</th><th>Ціна MyGadget</th><th>Відхилення</th></tr>`;
   const actions = isAdmin
     ? `<div class="section-actions"><button class="button" type="button" data-action="refresh-section" data-section="${section.key}">Оновити розділ</button><button class="button" type="button" data-action="add-row" data-section="${section.key}">Додати рядок</button></div>`
     : "";
@@ -202,8 +208,8 @@ function updateRowDom(tr, row) {
   tr.dataset.hasMygadgetUrl = row.mygadget_url ? "1" : "0";
   tr.dataset.hasJabkoPrice = row.jabko_price_uah ? "1" : "0";
   tr.dataset.hasMygadgetPrice = row.mygadget_price_uah ? "1" : "0";
-  tr.querySelector('[data-price-field="jabko_price_uah"]').textContent = money(row.jabko_price_uah);
-  tr.querySelector('[data-price-field="mygadget_price_uah"]').textContent = money(row.mygadget_price_uah);
+  tr.querySelector('[data-price-field="jabko_price_uah"]').innerHTML = linkedPrice(row.jabko_price_uah, row.jabko_url);
+  tr.querySelector('[data-price-field="mygadget_price_uah"]').innerHTML = linkedPrice(row.mygadget_price_uah, row.mygadget_url);
   tr.querySelector("[data-deviation-cell]").innerHTML = deviationHtml(row);
 }
 
