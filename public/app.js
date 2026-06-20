@@ -36,6 +36,7 @@ function lastUpdateText() {
   const date = new Date(meta.last_updated_at);
   if (Number.isNaN(date.getTime())) return "Останнє оновлення: час невідомий";
   const formatted = new Intl.DateTimeFormat("uk-UA", {
+    timeZone: "Europe/Kyiv",
     day: "2-digit",
     month: "2-digit",
     year: "numeric",
