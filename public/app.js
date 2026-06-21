@@ -162,10 +162,10 @@ function applyTableTools() {
 function publicRow(row, index) {
   return `<tr ${rowAttrs(row, index)}>
     <td class="num">${index + 1}</td>
-    <td class="name-col">${linkedName(row.jabko_name, row.jabko_url)}</td>
-    <td class="price">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
-    <td class="price">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
-    <td>${deviationHtml(row)}</td>
+    <td class="name-col mobile-product-name">${linkedName(row.jabko_name, row.jabko_url)}</td>
+    <td class="price mobile-price mobile-jabko" data-mobile-label="Jabko">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
+    <td class="price mobile-price mobile-mygadget" data-mobile-label="MyGadget">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
+    <td class="mobile-deviation" data-mobile-label="Відхилення">${deviationHtml(row)}</td>
   </tr>`;
 }
 
@@ -187,15 +187,15 @@ function adminRow(section, row, index) {
 function renderSection(section, open, isAdmin) {
   const rows = section.rows.map((row, index) => isAdmin ? adminRow(section, row, index) : publicRow(row, index)).join("");
   const head = isAdmin
-    ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Ціна Jabko</th><th>Ціна MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
-    : `<tr><th class="num">#</th><th>Товар Jabko</th><th>Ціна Jabko</th><th>Ціна MyGadget</th><th>Відхилення</th></tr>`;
+    ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
+    : `<tr><th class="num">#</th><th>Товар Jabko</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th></tr>`;
   const actions = isAdmin
     ? `<div class="section-actions"><button class="button" type="button" data-action="refresh-section" data-section="${section.key}">Оновити розділ</button><button class="button" type="button" data-action="add-row" data-section="${section.key}">Додати рядок</button></div>`
     : "";
   return `<details class="section" ${open ? "open" : ""}>
     <summary><span class="summary-left"><span class="summary-title">${escapeHtml(section.title)}</span><span class="summary-count">${section.rows.length} рядків</span></span><span>⌄</span></summary>
     <section class="table-shell">
-      <table><thead>${head}</thead><tbody data-filter-body="1">${rows}</tbody></table>
+      <table class="${isAdmin ? "admin-table" : "public-table"}"><thead>${head}</thead><tbody data-filter-body="1">${rows}</tbody></table>
       ${actions}
     </section>
   </details>`;
