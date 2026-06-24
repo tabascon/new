@@ -1,4 +1,13 @@
 const DATA_KEY = "price_compare_data";
+const SCHEDULE_KEY = "price_refresh_schedule";
+const EMPTY_SCHEDULE = {
+  timezone: "Europe/Kyiv",
+  slots: [
+    { time: "", active_from: "" },
+    { time: "", active_from: "" },
+    { time: "", active_from: "" },
+  ],
+};
 
 export function isValidPriceData(data) {
   if (!data || !Array.isArray(data.sections) || data.sections.length === 0) return false;
@@ -28,6 +37,30 @@ export async function saveData(env, data) {
     throw new Error("Invalid price table data");
   }
   await env.PRICE_DATA.put(DATA_KEY, JSON.stringify(data));
+}
+
+export async function loadSchedule(env) {
+  if (!env.PRICE_DATA) {
+    throw new Error("KV binding PRICE_DATA is not configured");
+  }
+  const saved = await env.PRICE_DATA.get(SCHEDULE_KEY, "json");
+  if (!saved || !Array.isArray(saved.slots) || saved.slots.length !== 3) {
+    return structuredClone(EMPTY_SCHEDULE);
+  }
+  return {
+    timezone: "Europe/Kyiv",
+    slots: saved.slots.map((slot) => ({
+      time: String(slot?.time || ""),
+      active_from: String(slot?.active_from || ""),
+    })),
+  };
+}
+
+export async function saveSchedule(env, schedule) {
+  if (!env.PRICE_DATA) {
+    throw new Error("KV binding PRICE_DATA is not configured");
+  }
+  await env.PRICE_DATA.put(SCHEDULE_KEY, JSON.stringify(schedule));
 }
 
 export function json(data, status = 200) {

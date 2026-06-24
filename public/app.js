@@ -10,6 +10,7 @@ const FIELD_NAMES = [
 let appData = { sections: [] };
 let mode = window.location.pathname === "/admin" ? "admin" : "table";
 let refreshInProgress = false;
+let refreshSchedule = { slots: [{ time: "" }, { time: "" }, { time: "" }] };
 
 const REFRESH_CONCURRENCY = 5;
 const REFRESH_REQUEST_TIMEOUT_MS = 30000;
@@ -247,8 +248,17 @@ function render() {
   qs("#last-update").textContent = lastUpdateText();
   qs("#save-button").classList.toggle("hidden", !isAdmin);
   qs("#refresh-all-button").classList.toggle("hidden", !isAdmin);
+  qs("#schedule-panel").classList.toggle("hidden", !isAdmin);
   qs("#sections").innerHTML = appData.sections.map((section, index) => renderSection(section, index === 0, isAdmin)).join("");
+  if (isAdmin) renderSchedule();
   applyTableTools();
+}
+
+function renderSchedule() {
+  for (let index = 0; index < 3; index += 1) {
+    const input = qs(`#schedule-time-${index + 1}`);
+    if (input) input.value = refreshSchedule.slots[index]?.time || "";
+  }
 }
 
 function showNotice(message, error = false) {
@@ -397,6 +407,15 @@ async function loadData() {
     appData = await api("/initial-data.json");
   }
   render();
+  if (mode === "admin") {
+    try {
+      const result = await api("/api/schedule");
+      refreshSchedule = result.schedule;
+      renderSchedule();
+    } catch (error) {
+      showNotice(`Не вдалося завантажити розклад: ${error.message}`, true);
+    }
+  }
   try {
     const exchange = await api("/api/exchange-rate");
     if (Number(exchange.rate) > 0) {
@@ -405,6 +424,29 @@ async function loadData() {
     }
   } catch {
     // Keep the table usable if MyGadget temporarily does not expose its rate.
+  }
+}
+
+async function saveSchedule() {
+  const times = [1, 2, 3].map((index) => qs(`#schedule-time-${index}`).value);
+  const active = times.filter(Boolean);
+  if (new Set(active).size !== active.length) {
+    showNotice("Час автоматичного оновлення не повинен повторюватися.", true);
+    return;
+  }
+  const button = qs("#save-schedule-button");
+  button.disabled = true;
+  try {
+    const result = await api("/api/schedule", { times });
+    refreshSchedule = result.schedule;
+    renderSchedule();
+    showNotice(active.length
+      ? `Розклад збережено: ${active.join(", ")}`
+      : "Автоматичне оновлення вимкнено.");
+  } catch (error) {
+    showNotice(`Не вдалося зберегти розклад: ${error.message}`, true);
+  } finally {
+    button.disabled = false;
   }
 }
 
@@ -815,6 +857,7 @@ async function downloadXlsx() {
 document.addEventListener("click", async (event) => {
   const target = event.target;
   if (target.id === "save-button") await saveData();
+  if (target.id === "save-schedule-button") await saveSchedule();
   if (target.id === "refresh-all-button") await refreshRows();
   if (target.id === "download-button") {
     try {

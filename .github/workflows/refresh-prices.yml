@@ -2,9 +2,7 @@ name: Refresh all prices
 
 on:
   schedule:
-    # Frequent off-peak checks make the 12:00/17:00 refresh resilient to
-    # GitHub scheduler delays. The script runs each Kyiv slot only once.
-    - cron: "7,22,37,52 * * * *"
+    - cron: "*/5 * * * *"
       timezone: "Europe/Kyiv"
   workflow_dispatch:
 
@@ -19,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Refresh due 12:00 or 17:00 Kyiv slot
+      - name: Refresh due admin-configured Kyiv slot
         env:
           ADMIN_USER: ${{ secrets.ADMIN_USER }}
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}

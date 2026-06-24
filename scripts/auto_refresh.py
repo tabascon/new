@@ -17,7 +17,6 @@ ADMIN_USER = os.environ["ADMIN_USER"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 WORKERS = max(1, min(int(os.environ.get("REFRESH_WORKERS", "6")), 10))
 KYIV = ZoneInfo("Europe/Kyiv")
-TARGET_HOURS = {12, 17}
 
 
 def auth_header():
@@ -66,28 +65,42 @@ def refresh_item(item):
         return section_index, row_index, None, str(error)
 
 
-def due_slot(now_kyiv):
-    due_hours = [hour for hour in TARGET_HOURS if now_kyiv.hour >= hour]
-    if not due_hours:
-        return None
-    return f"{now_kyiv:%Y-%m-%d}T{max(due_hours):02d}"
+def due_slot(schedule, now_kyiv, last_auto_slot=""):
+    today = now_kyiv.strftime("%Y-%m-%d")
+    current_time = now_kyiv.strftime("%H:%M")
+    candidates = []
+    for item in schedule.get("slots", []):
+        slot_time = str(item.get("time", ""))
+        active_from = str(item.get("active_from", ""))
+        if not slot_time or not active_from:
+            continue
+        slot_key = f"{today}T{slot_time}"
+        if active_from <= today and slot_time <= current_time and slot_key > last_auto_slot:
+            candidates.append(slot_key)
+    return max(candidates, default=None)
 
 
 def main():
     force = os.environ.get("FORCE_REFRESH", "").lower() in {"1", "true", "yes"}
     now_kyiv = datetime.now(KYIV)
-    slot = due_slot(now_kyiv)
 
     data = request_json("/api/data")
     meta = data.setdefault("meta", {})
 
     if not force:
+        schedule = request_json("/api/schedule")["schedule"]
+        slot = due_slot(schedule, now_kyiv, str(meta.get("last_auto_slot", "")))
         if slot is None:
-            print(f"Skip: Kyiv time is {now_kyiv:%H:%M}; the first slot is 12:00.")
+            active_times = [
+                item.get("time", "")
+                for item in schedule.get("slots", [])
+                if item.get("time")
+            ]
+            schedule_text = ", ".join(active_times) if active_times else "disabled"
+            print(f"Skip: no due slot at {now_kyiv:%H:%M}; schedule={schedule_text}.")
             return 0
-        if meta.get("last_auto_slot") == slot:
-            print(f"Skip: slot {slot} was already completed.")
-            return 0
+    else:
+        slot = None
 
     clock = request_json(
         "/api/update-clock",
