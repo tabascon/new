@@ -37,6 +37,17 @@ function money(value) {
 
 function lastUpdateText() {
   const meta = appData.meta || {};
+  if (meta.last_update_display_kyiv) {
+    const status = meta.last_update_status || "completed";
+    if (status === "running") {
+      return `Останнє оновлення: ${meta.last_update_display_kyiv} · оновлення виконується`;
+    }
+    if (status === "failed") {
+      return `Останнє оновлення: ${meta.last_update_display_kyiv} · помилка оновлення`;
+    }
+    const errors = Number(meta.last_update_errors ?? meta.last_updated_errors ?? 0);
+    return `Останнє оновлення: ${meta.last_update_display_kyiv} · помилок: ${errors}`;
+  }
   if (!meta.last_updated_at) return "Останнє оновлення: ще не виконувалось";
   const date = new Date(meta.last_updated_at);
   if (Number.isNaN(date.getTime())) return "Останнє оновлення: час невідомий";
@@ -304,6 +315,28 @@ async function refreshApi(row) {
   throw lastError;
 }
 
+function mergeClockMeta(result) {
+  if (!result?.meta) return;
+  appData.meta = { ...(appData.meta || {}), ...result.meta };
+  const label = qs("#last-update");
+  if (label) label.textContent = lastUpdateText();
+}
+
+async function updateClock(status, details = {}) {
+  let lastError;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      const result = await api("/api/update-clock", { status, ...details });
+      mergeClockMeta(result);
+      return result;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await sleep(500 * (2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
 function setRefreshControlsDisabled(disabled) {
   ["save-button", "refresh-all-button"].forEach((id) => {
     const button = qs(`#${id}`);
@@ -386,18 +419,55 @@ async function refreshRow(sectionKey, index, button) {
   syncAdminInputs();
   const section = appData.sections.find((item) => item.key === sectionKey);
   const row = section.rows[index];
-  button.disabled = true;
+  refreshInProgress = true;
+  setRefreshControlsDisabled(true);
   button.textContent = "Оновлення...";
+  const startedAt = Date.now();
+  let updateId = "";
+  let result = null;
   try {
-    const result = await refreshApi(row);
+    const clock = await updateClock("running", { source: "manual" });
+    updateId = clock.meta.last_update_id;
+    result = await refreshApi(row);
     Object.assign(row, result.row);
     const tr = document.querySelector(`tr[data-section="${sectionKey}"][data-index="${index}"]`);
     updateRowDom(tr, row);
+    appData.meta = {
+      ...(appData.meta || {}),
+      last_updated_source: "manual",
+      last_updated_rows: 1,
+      last_updated_prices: Number(result.updated || 0),
+      last_updated_errors: Number(result.failed || 0),
+      last_update_errors: Number(result.failed || 0),
+      last_update_duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+    };
+    await saveData();
+    await updateClock("completed", {
+      update_id: updateId,
+      errors: Number(result.failed || 0),
+      rows: 1,
+      prices: Number(result.updated || 0),
+      duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+    });
     showNotice(`Рядок оновлено. Оновлено цін: ${result.updated}. Помилок: ${result.failed}.`, result.failed > 0);
   } catch (error) {
+    if (updateId) {
+      try {
+        await updateClock("failed", {
+          update_id: updateId,
+          errors: Math.max(1, Number(result?.failed || 0)),
+          rows: result ? 1 : 0,
+          prices: Number(result?.updated || 0),
+          duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+        });
+      } catch {
+        // Keep the original refresh error visible.
+      }
+    }
     showNotice(`Не вдалося оновити рядок: ${error.message}`, true);
   } finally {
-    button.disabled = false;
+    refreshInProgress = false;
+    setRefreshControlsDisabled(false);
     button.textContent = "Оновити";
   }
 }
@@ -418,6 +488,7 @@ async function refreshRows(sectionKey = "") {
   let completed = 0;
   let nextIndex = 0;
   const startedAt = Date.now();
+  let updateId = "";
   setProgress(0, rows.length, `Старт · ${REFRESH_CONCURRENCY} паралельних потоків`);
 
   async function worker() {
@@ -456,17 +527,19 @@ async function refreshRows(sectionKey = "") {
   }
 
   try {
+    const clock = await updateClock("running", { source: "manual" });
+    updateId = clock.meta.last_update_id;
     await Promise.all(Array.from(
       { length: Math.min(REFRESH_CONCURRENCY, Math.max(rows.length, 1)) },
       () => worker(),
     ));
     appData.meta = {
       ...(appData.meta || {}),
-      last_updated_at: new Date().toISOString(),
       last_updated_source: "manual",
       last_updated_rows: rows.length,
       last_updated_prices: updated,
       last_updated_errors: failed,
+      last_update_errors: failed,
       last_update_duration_seconds: Math.round((Date.now() - startedAt) / 1000),
     };
     try {
@@ -477,8 +550,28 @@ async function refreshRows(sectionKey = "") {
     }
     render();
     await saveData();
+    await updateClock("completed", {
+      update_id: updateId,
+      errors: failed,
+      rows: rows.length,
+      prices: updated,
+      duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+    });
     showNotice(`Оновлення завершено. Оновлено цін: ${updated}. Помилок: ${failed}.`, failed > 0);
   } catch (error) {
+    if (updateId) {
+      try {
+        await updateClock("failed", {
+          update_id: updateId,
+          errors: Math.max(1, failed),
+          rows: completed,
+          prices: updated,
+          duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+        });
+      } catch {
+        // Keep the original refresh error visible.
+      }
+    }
     showNotice(`Оновлення зупинено: ${error.message}`, true);
   } finally {
     refreshInProgress = false;

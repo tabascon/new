@@ -6,7 +6,7 @@ import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
@@ -89,6 +89,14 @@ def main():
             print(f"Skip: slot {slot} was already completed.")
             return 0
 
+    clock = request_json(
+        "/api/update-clock",
+        {"status": "running", "source": "manual workflow" if force else "automatic"},
+    )
+    clock_meta = clock["meta"]
+    update_id = clock_meta["last_update_id"]
+    meta.update(clock_meta)
+
     items = []
     for section_index, section in enumerate(data.get("sections", [])):
         for row_index, row in enumerate(section.get("rows", [])):
@@ -100,51 +108,81 @@ def main():
     failed_rows = 0
     completed = 0
 
-    print(f"Refreshing {len(items)} rows with {WORKERS} workers.")
-    with ThreadPoolExecutor(max_workers=WORKERS) as executor:
-        futures = [executor.submit(refresh_item, item) for item in items]
-        for future in as_completed(futures):
-            section_index, row_index, result, error = future.result()
-            completed += 1
-            if result is None:
-                failed_rows += 1
-                print(f"[{completed}/{len(items)}] failed row: {error}")
-            else:
-                data["sections"][section_index]["rows"][row_index] = result["row"]
-                updated_prices += int(result.get("updated", 0))
-                failed_prices += int(result.get("failed", 0))
-            if completed % 25 == 0 or completed == len(items):
-                print(f"Progress: {completed}/{len(items)}")
-
-    finished_utc = datetime.now(timezone.utc)
-    meta.update(
-        {
-            "last_updated_at": finished_utc.isoformat().replace("+00:00", "Z"),
-            "last_updated_source": "manual workflow" if force else "automatic",
-            "last_updated_rows": len(items),
-            "last_updated_prices": updated_prices,
-            "last_updated_errors": failed_prices + failed_rows,
-            "last_update_duration_seconds": round(time.monotonic() - started),
-        }
-    )
     try:
-        exchange = request_json("/api/exchange-rate")
-        rate = float(exchange.get("rate", 0))
-        if rate > 0:
-            meta["usd_rate_uah"] = f"{rate:.2f}"
-            print(f"MyGadget USD rate: {rate:.2f}")
-    except Exception as error:
-        print(f"Warning: exchange rate was not updated: {error}")
-    if not force:
-        meta["last_auto_slot"] = slot
+        print(f"Refreshing {len(items)} rows with {WORKERS} workers.")
+        with ThreadPoolExecutor(max_workers=WORKERS) as executor:
+            futures = [executor.submit(refresh_item, item) for item in items]
+            for future in as_completed(futures):
+                section_index, row_index, result, error = future.result()
+                completed += 1
+                if result is None:
+                    failed_rows += 1
+                    print(f"[{completed}/{len(items)}] failed row: {error}")
+                else:
+                    data["sections"][section_index]["rows"][row_index] = result["row"]
+                    updated_prices += int(result.get("updated", 0))
+                    failed_prices += int(result.get("failed", 0))
+                if completed % 25 == 0 or completed == len(items):
+                    print(f"Progress: {completed}/{len(items)}")
 
-    request_json("/api/save", data)
-    print(
-        "Saved: "
-        f"rows={len(items)}, updated_prices={updated_prices}, "
-        f"errors={failed_prices + failed_rows}, time={meta['last_updated_at']}"
-    )
-    return 0
+        total_errors = failed_prices + failed_rows
+        duration_seconds = round(time.monotonic() - started)
+        meta.update(
+            {
+                "last_updated_source": "manual workflow" if force else "automatic",
+                "last_updated_rows": len(items),
+                "last_updated_prices": updated_prices,
+                "last_updated_errors": total_errors,
+                "last_update_errors": total_errors,
+                "last_update_duration_seconds": duration_seconds,
+            }
+        )
+        try:
+            exchange = request_json("/api/exchange-rate")
+            rate = float(exchange.get("rate", 0))
+            if rate > 0:
+                meta["usd_rate_uah"] = f"{rate:.2f}"
+                print(f"MyGadget USD rate: {rate:.2f}")
+        except Exception as error:
+            print(f"Warning: exchange rate was not updated: {error}")
+        if not force:
+            meta["last_auto_slot"] = slot
+
+        request_json("/api/save", data)
+        completed_clock = request_json(
+            "/api/update-clock",
+            {
+                "status": "completed",
+                "update_id": update_id,
+                "errors": total_errors,
+                "rows": len(items),
+                "prices": updated_prices,
+                "duration_seconds": duration_seconds,
+            },
+        )
+        meta.update(completed_clock["meta"])
+        print(
+            "Saved: "
+            f"rows={len(items)}, updated_prices={updated_prices}, "
+            f"errors={total_errors}, time={meta['last_update_display_kyiv']}"
+        )
+        return 0
+    except Exception:
+        try:
+            request_json(
+                "/api/update-clock",
+                {
+                    "status": "failed",
+                    "update_id": update_id,
+                    "errors": max(1, failed_prices + failed_rows),
+                    "rows": completed,
+                    "prices": updated_prices,
+                    "duration_seconds": round(time.monotonic() - started),
+                },
+            )
+        except Exception as clock_error:
+            print(f"Warning: failed to record update failure: {clock_error}")
+        raise
 
 
 if __name__ == "__main__":

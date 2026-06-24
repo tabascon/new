@@ -4,6 +4,7 @@ const ADMIN_PASSWORD = "Www54589";
 function needsAuth(pathname, method) {
   if (pathname === "/admin" || pathname.startsWith("/admin/")) return true;
   if (pathname === "/api/save") return true;
+  if (pathname === "/api/update-clock") return true;
   if (pathname === "/api/patch-mygadget") return true;
   if (pathname === "/api/refresh-row-price") return true;
   if (pathname === "/api/download-xlsx" && method !== "GET") return true;
