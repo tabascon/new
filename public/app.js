@@ -9,6 +9,11 @@ const FIELD_NAMES = [
 
 let appData = { sections: [] };
 let mode = window.location.pathname === "/admin" ? "admin" : "table";
+let refreshInProgress = false;
+
+const REFRESH_CONCURRENCY = 5;
+const REFRESH_REQUEST_TIMEOUT_MS = 30000;
+const REFRESH_REQUEST_RETRIES = 2;
 
 const qs = (selector) => document.querySelector(selector);
 
@@ -264,6 +269,54 @@ async function api(path, payload) {
   return response.json();
 }
 
+function sleep(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function refreshApi(row) {
+  let lastError;
+  for (let attempt = 0; attempt <= REFRESH_REQUEST_RETRIES; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REFRESH_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch("/api/refresh-row-price", {
+        method: "POST",
+        signal: controller.signal,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ row }),
+      });
+      if (!response.ok) {
+        const error = new Error(await response.text() || `HTTP ${response.status}`);
+        error.retryable = response.status === 429 || response.status >= 500;
+        throw error;
+      }
+      return await response.json();
+    } catch (error) {
+      lastError = error;
+      const retryable = error.name === "AbortError" || error.retryable || error instanceof TypeError;
+      if (!retryable || attempt === REFRESH_REQUEST_RETRIES) throw error;
+      const backoff = (800 * (2 ** attempt)) + Math.floor(Math.random() * 400);
+      await sleep(backoff);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw lastError;
+}
+
+function setRefreshControlsDisabled(disabled) {
+  ["save-button", "refresh-all-button"].forEach((id) => {
+    const button = qs(`#${id}`);
+    if (button) button.disabled = disabled;
+  });
+  document.querySelectorAll('[data-action="refresh-row"], [data-action="refresh-section"], [data-action="add-row"]')
+    .forEach((button) => { button.disabled = disabled; });
+}
+
+function rowPriceCount(row) {
+  return Number(Boolean(row.jabko_url)) + Number(Boolean(row.mygadget_url));
+}
+
 function xhrJson(path, payload) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
@@ -329,17 +382,20 @@ async function saveData() {
 }
 
 async function refreshRow(sectionKey, index, button) {
+  if (refreshInProgress) return;
   syncAdminInputs();
   const section = appData.sections.find((item) => item.key === sectionKey);
   const row = section.rows[index];
   button.disabled = true;
   button.textContent = "Оновлення...";
   try {
-    const result = await api("/api/refresh-row-price", { row });
+    const result = await refreshApi(row);
     Object.assign(row, result.row);
     const tr = document.querySelector(`tr[data-section="${sectionKey}"][data-index="${index}"]`);
     updateRowDom(tr, row);
     showNotice(`Рядок оновлено. Оновлено цін: ${result.updated}. Помилок: ${result.failed}.`, result.failed > 0);
+  } catch (error) {
+    showNotice(`Не вдалося оновити рядок: ${error.message}`, true);
   } finally {
     button.disabled = false;
     button.textContent = "Оновити";
@@ -347,44 +403,87 @@ async function refreshRow(sectionKey, index, button) {
 }
 
 async function refreshRows(sectionKey = "") {
+  if (refreshInProgress) return;
   syncAdminInputs();
   const rows = [];
   appData.sections.forEach((section) => {
     if (sectionKey && section.key !== sectionKey) return;
     section.rows.forEach((row, index) => rows.push({ section, row, index }));
   });
+
+  refreshInProgress = true;
+  setRefreshControlsDisabled(true);
   let failed = 0;
   let updated = 0;
-  setProgress(0, rows.length, "Старт оновлення...");
-  for (let i = 0; i < rows.length; i += 1) {
-    const item = rows[i];
-    try {
-      const result = await api("/api/refresh-row-price", { row: item.row });
-      Object.assign(item.row, result.row);
-      updated += result.updated;
-      failed += result.failed;
-    } catch {
-      failed += 1;
+  let completed = 0;
+  let nextIndex = 0;
+  const startedAt = Date.now();
+  setProgress(0, rows.length, `Старт · ${REFRESH_CONCURRENCY} паралельних потоків`);
+
+  async function worker() {
+    while (true) {
+      const queueIndex = nextIndex;
+      nextIndex += 1;
+      if (queueIndex >= rows.length) return;
+
+      const item = rows[queueIndex];
+      if (!item.row.jabko_url && !item.row.mygadget_url) {
+        item.row.jabko_price_uah = "";
+        item.row.mygadget_price_uah = "";
+      } else {
+        try {
+          const result = await refreshApi(item.row);
+          Object.assign(item.row, result.row);
+          updated += Number(result.updated || 0);
+          failed += Number(result.failed || 0);
+        } catch {
+          failed += rowPriceCount(item.row);
+        }
+      }
+
+      completed += 1;
+      const elapsedSeconds = Math.max(1, Math.round((Date.now() - startedAt) / 1000));
+      const rowsPerSecond = completed / elapsedSeconds;
+      const remainingSeconds = rowsPerSecond > 0
+        ? Math.max(0, Math.round((rows.length - completed) / rowsPerSecond))
+        : 0;
+      setProgress(
+        completed,
+        rows.length,
+        `${completed} з ${rows.length} · залишилось приблизно ${Math.ceil(remainingSeconds / 60)} хв · помилок: ${failed}`,
+      );
     }
-    setProgress(i + 1, rows.length, `${item.section.title}, рядок ${item.index + 1}`);
   }
-  appData.meta = {
-    ...(appData.meta || {}),
-    last_updated_at: new Date().toISOString(),
-    last_updated_source: "manual",
-    last_updated_rows: rows.length,
-    last_updated_prices: updated,
-    last_updated_errors: failed,
-  };
+
   try {
-    const exchange = await api("/api/exchange-rate");
-    if (Number(exchange.rate) > 0) appData.meta.usd_rate_uah = exchange.rate;
-  } catch {
-    // Preserve the previously saved rate on temporary MyGadget failures.
+    await Promise.all(Array.from(
+      { length: Math.min(REFRESH_CONCURRENCY, Math.max(rows.length, 1)) },
+      () => worker(),
+    ));
+    appData.meta = {
+      ...(appData.meta || {}),
+      last_updated_at: new Date().toISOString(),
+      last_updated_source: "manual",
+      last_updated_rows: rows.length,
+      last_updated_prices: updated,
+      last_updated_errors: failed,
+      last_update_duration_seconds: Math.round((Date.now() - startedAt) / 1000),
+    };
+    try {
+      const exchange = await api("/api/exchange-rate");
+      if (Number(exchange.rate) > 0) appData.meta.usd_rate_uah = exchange.rate;
+    } catch {
+      // Preserve the previously saved rate on temporary MyGadget failures.
+    }
+    render();
+    await saveData();
+    showNotice(`Оновлення завершено. Оновлено цін: ${updated}. Помилок: ${failed}.`, failed > 0);
+  } catch (error) {
+    showNotice(`Оновлення зупинено: ${error.message}`, true);
+  } finally {
+    refreshInProgress = false;
+    setRefreshControlsDisabled(false);
   }
-  render();
-  await saveData();
-  showNotice(`Оновлення завершено. Оновлено цін: ${updated}. Помилок: ${failed}.`, failed > 0);
 }
 
 function addRow(sectionKey) {

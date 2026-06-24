@@ -110,15 +110,26 @@ function parseJabkoSwatchPrice(html, url) {
 }
 
 async function fetchHtml(url) {
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 PriceCompareBot/1.0",
-      "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "accept-language": "uk-UA,uk;q=0.9,en;q=0.8",
-    },
-  });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "user-agent": "Mozilla/5.0 PriceCompareBot/1.0",
+        "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "accept-language": "uk-UA,uk;q=0.9,en;q=0.8",
+        "cache-control": "no-cache",
+      },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.text();
+  } catch (error) {
+    if (error.name === "AbortError") throw new Error("Таймаут запиту");
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export async function parseJabkoPrice(url) {
@@ -161,32 +172,40 @@ export async function refreshRow(row) {
   let updated = 0;
   let failed = 0;
   const errors = [];
+  const jobs = [];
 
   if (!output.jabko_url) {
     output.jabko_price_uah = "";
   } else {
-    try {
-      output.jabko_price_uah = await parseJabkoPrice(output.jabko_url);
-      if (!output.jabko_price_uah) throw new Error("Ціну не знайдено");
-      updated += 1;
-    } catch (error) {
-      failed += 1;
-      errors.push(`Jabko: ${error.message}`);
-    }
+    jobs.push((async () => {
+      try {
+        const price = await parseJabkoPrice(output.jabko_url);
+        if (!price) throw new Error("Ціну не знайдено");
+        output.jabko_price_uah = price;
+        updated += 1;
+      } catch (error) {
+        failed += 1;
+        errors.push(`Jabko: ${error.message}`);
+      }
+    })());
   }
 
   if (!output.mygadget_url) {
     output.mygadget_price_uah = "";
   } else {
-    try {
-      output.mygadget_price_uah = await parseMyGadgetPrice(output.mygadget_url);
-      if (!output.mygadget_price_uah) throw new Error("Ціну не знайдено");
-      updated += 1;
-    } catch (error) {
-      failed += 1;
-      errors.push(`MyGadget: ${error.message}`);
-    }
+    jobs.push((async () => {
+      try {
+        const price = await parseMyGadgetPrice(output.mygadget_url);
+        if (!price) throw new Error("Ціну не знайдено");
+        output.mygadget_price_uah = price;
+        updated += 1;
+      } catch (error) {
+        failed += 1;
+        errors.push(`MyGadget: ${error.message}`);
+      }
+    })());
   }
 
+  await Promise.all(jobs);
   return { row: output, updated, failed, errors };
 }
