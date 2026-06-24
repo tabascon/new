@@ -87,6 +87,14 @@ function linkedName(name, url) {
   return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(name)}</a>`;
 }
 
+function publicProductName(row) {
+  if (!row.mygadget_name) return '<span class="muted">-</span>';
+  return `<div class="product-name-wrap">
+    <span class="product-name-link">${linkedName(row.mygadget_name, row.mygadget_url)}</span>
+    <button class="copy-name-button" type="button" data-action="copy-product-name" data-copy-text="${escapeHtml(row.mygadget_name)}" aria-label="Копіювати назву товару">Копіювати</button>
+  </div>`;
+}
+
 function linkedPrice(value, url) {
   const label = money(value);
   if (!label) return '<span class="muted">-</span>';
@@ -114,9 +122,16 @@ function deviationHtml(row) {
 }
 
 function rowAttrs(row, index) {
+  const searchText = [
+    row.jabko_name,
+    row.jabko_url,
+    row.mygadget_name,
+    row.mygadget_url,
+  ].filter(Boolean).join(" ");
   return [
     'data-filter-row="1"',
     `data-original-index="${index}"`,
+    `data-search-text="${escapeHtml(searchText)}"`,
     `data-deviation="${escapeHtml(deviation(row) || "0")}"`,
     `data-has-jabko-url="${row.jabko_url ? 1 : 0}"`,
     `data-has-mygadget-url="${row.mygadget_url ? 1 : 0}"`,
@@ -127,7 +142,7 @@ function rowAttrs(row, index) {
 
 function rowText(row) {
   const fields = [...row.querySelectorAll("textarea, input")].map((item) => item.value || "");
-  return `${row.textContent || ""} ${fields.join(" ")}`.toLowerCase();
+  return `${row.textContent || ""} ${row.dataset.searchText || ""} ${fields.join(" ")}`.toLowerCase();
 }
 
 function rowMatchesFilter(row, filter) {
@@ -179,7 +194,7 @@ function applyTableTools() {
 function publicRow(row, index) {
   return `<tr ${rowAttrs(row, index)}>
     <td class="num">${index + 1}</td>
-    <td class="name-col mobile-product-name">${linkedName(row.jabko_name, row.jabko_url)}</td>
+    <td class="name-col mobile-product-name">${publicProductName(row)}</td>
     <td class="price mobile-price mobile-jabko" data-mobile-label="Jabko">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
     <td class="price mobile-price mobile-mygadget" data-mobile-label="MyGadget">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
     <td class="mobile-deviation" data-mobile-label="Відхилення">${deviationHtml(row)}</td>
@@ -205,7 +220,7 @@ function renderSection(section, open, isAdmin) {
   const rows = section.rows.map((row, index) => isAdmin ? adminRow(section, row, index) : publicRow(row, index)).join("");
   const head = isAdmin
     ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
-    : `<tr><th class="num">#</th><th>Товар Jabko</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th></tr>`;
+    : `<tr><th class="num">#</th><th>Товар MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th></tr>`;
   const actions = isAdmin
     ? `<div class="section-actions"><button class="button" type="button" data-action="refresh-section" data-section="${section.key}">Оновити розділ</button><button class="button" type="button" data-action="add-row" data-section="${section.key}">Додати рядок</button></div>`
     : "";
@@ -447,6 +462,45 @@ async function saveSchedule() {
     showNotice(`Не вдалося зберегти розклад: ${error.message}`, true);
   } finally {
     button.disabled = false;
+  }
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Fall back when the browser exposes Clipboard API but denies permission.
+    }
+  }
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("Копіювання не підтримується браузером");
+}
+
+async function copyProductName(button) {
+  const value = button.dataset.copyText || "";
+  if (!value) return;
+  const original = button.textContent;
+  button.disabled = true;
+  try {
+    await copyText(value);
+    button.textContent = "Скопійовано";
+    setTimeout(() => {
+      button.textContent = original;
+      button.disabled = false;
+    }, 1300);
+  } catch (error) {
+    button.disabled = false;
+    showNotice(`Не вдалося скопіювати назву: ${error.message}`, true);
   }
 }
 
@@ -856,6 +910,10 @@ async function downloadXlsx() {
 
 document.addEventListener("click", async (event) => {
   const target = event.target;
+  if (target.dataset.action === "copy-product-name") {
+    await copyProductName(target);
+    return;
+  }
   if (target.id === "save-button") await saveData();
   if (target.id === "save-schedule-button") await saveSchedule();
   if (target.id === "refresh-all-button") await refreshRows();
