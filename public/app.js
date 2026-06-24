@@ -91,7 +91,7 @@ function publicProductName(row) {
   if (!row.mygadget_name) return '<span class="muted">-</span>';
   return `<div class="product-name-wrap">
     <span class="product-name-link">${linkedName(row.mygadget_name, row.mygadget_url)}</span>
-    <button class="copy-name-button" type="button" data-action="copy-product-name" data-copy-text="${escapeHtml(row.mygadget_name)}" aria-label="Копіювати назву товару">Копіювати</button>
+    <button class="copy-name-button" type="button" data-action="copy-product-name" data-copy-text="${escapeHtml(row.mygadget_name)}" aria-label="Копіювати назву товару" title="Копіювати назву"><span aria-hidden="true">⧉</span></button>
   </div>`;
 }
 
@@ -489,13 +489,15 @@ async function copyText(value) {
 async function copyProductName(button) {
   const value = button.dataset.copyText || "";
   if (!value) return;
-  const original = button.textContent;
+  const original = button.innerHTML;
   button.disabled = true;
   try {
     await copyText(value);
-    button.textContent = "Скопійовано";
+    button.innerHTML = '<span aria-hidden="true">✓</span>';
+    button.title = "Скопійовано";
     setTimeout(() => {
-      button.textContent = original;
+      button.innerHTML = original;
+      button.title = "Копіювати назву";
       button.disabled = false;
     }, 1300);
   } catch (error) {
