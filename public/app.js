@@ -913,8 +913,11 @@ async function downloadXlsx() {
 
 document.addEventListener("click", async (event) => {
   const target = event.target;
-  if (target.dataset.action === "copy-product-name") {
-    await copyProductName(target);
+  const copyButton = target.closest?.('[data-action="copy-product-name"]');
+  if (copyButton) {
+    event.preventDefault();
+    event.stopPropagation();
+    await copyProductName(copyButton);
     return;
   }
   if (target.id === "save-button") await saveData();

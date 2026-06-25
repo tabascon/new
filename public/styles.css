@@ -184,6 +184,7 @@ tr.filtered-out { display: none; }
   cursor: pointer;
 }
 .copy-name-button:hover { color: var(--text); background: var(--soft); }
+.copy-name-button > span { pointer-events: none; }
 .copy-name-button::after {
   content: attr(data-tooltip);
   position: absolute;
