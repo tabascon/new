@@ -25,6 +25,7 @@ a:hover { text-decoration: underline; }
   margin: 0 auto;
   padding: 14px 24px;
 }
+.admin-mode .wrap { max-width: none; }
 .wrap { padding-top: 24px; }
 .actions, .section-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .button {

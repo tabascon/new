@@ -9,6 +9,7 @@ const FIELD_NAMES = [
 
 let appData = { sections: [] };
 let mode = window.location.pathname === "/admin" ? "admin" : "table";
+document.body.classList.toggle("admin-mode", mode === "admin");
 let refreshInProgress = false;
 let refreshSchedule = { slots: [{ time: "" }, { time: "" }, { time: "" }] };
 
