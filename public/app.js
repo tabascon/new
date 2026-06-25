@@ -90,8 +90,7 @@ function linkedName(name, url) {
 function publicProductName(row) {
   if (!row.mygadget_name) return '<span class="muted">-</span>';
   return `<div class="product-name-wrap">
-    <span class="product-name-link">${linkedName(row.mygadget_name, row.mygadget_url)}</span>
-    <button class="copy-name-button" type="button" data-action="copy-product-name" data-copy-text="${escapeHtml(row.mygadget_name)}" aria-label="Копіювати назву товару" title="Копіювати назву"><span aria-hidden="true">⧉</span></button>
+    <span class="product-name-link">${linkedName(row.mygadget_name, row.mygadget_url)}</span><button class="copy-name-button" type="button" data-action="copy-product-name" data-copy-text="${escapeHtml(row.mygadget_name)}" aria-label="Копіювати назву товару" title="Копіювати назву"><span aria-hidden="true">⧉</span></button>
   </div>`;
 }
 
