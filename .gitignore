@@ -5,3 +5,10 @@ site_edit_backup.csv
 *_backup_*.csv
 site_server.log
 
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+.env*
+!.env.example
