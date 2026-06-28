@@ -51,6 +51,16 @@ a:hover { text-decoration: underline; }
 }
 .button.green { background: var(--accent); border-color: var(--accent); color: #fff; }
 .button:disabled { opacity: 0.55; cursor: wait; }
+.icon-button {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+}
+.icon-button > span { pointer-events: none; }
+.refresh-row-button.is-loading > span { animation: refresh-spin 0.8s linear infinite; }
+@keyframes refresh-spin { to { transform: rotate(360deg); } }
 .hidden { display: none !important; }
 .toolbar {
   display: flex;

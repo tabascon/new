@@ -212,7 +212,7 @@ function adminRow(section, row, index) {
     <td class="price" data-price-field="jabko_price_uah">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
     <td class="price" data-price-field="mygadget_price_uah">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
     <td data-deviation-cell="1">${deviationHtml(row)}</td>
-    <td><button class="button" type="button" data-action="refresh-row">Оновити</button></td>
+    <td><button class="button icon-button refresh-row-button" type="button" data-action="refresh-row" aria-label="Оновити рядок" title="Оновити рядок"><span aria-hidden="true">↻</span></button></td>
   </tr>`;
 }
 
@@ -521,7 +521,8 @@ async function refreshRow(sectionKey, index, button) {
   const row = section.rows[index];
   refreshInProgress = true;
   setRefreshControlsDisabled(true);
-  button.textContent = "Оновлення...";
+  button.classList.add("is-loading");
+  button.title = "Оновлення рядка";
   const startedAt = Date.now();
   let updateId = "";
   let result = null;
@@ -568,7 +569,8 @@ async function refreshRow(sectionKey, index, button) {
   } finally {
     refreshInProgress = false;
     setRefreshControlsDisabled(false);
-    button.textContent = "Оновити";
+    button.classList.remove("is-loading");
+    button.title = "Оновити рядок";
   }
 }
 
