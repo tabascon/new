@@ -169,6 +169,19 @@ function compareRows(a, b, sort) {
   return Number(a.dataset.originalIndex || "0") - Number(b.dataset.originalIndex || "0");
 }
 
+function productCountLabel(count) {
+  const lastTwo = count % 100;
+  const last = count % 10;
+  const noun = lastTwo >= 11 && lastTwo <= 14
+    ? "товарів"
+    : last === 1
+      ? "товар"
+      : last >= 2 && last <= 4
+        ? "товари"
+        : "товарів";
+  return `${count} ${noun}`;
+}
+
 function applyTableTools() {
   const search = (qs("#table-search")?.value || "").trim().toLowerCase();
   const filter = qs("#table-filter")?.value || "all";
@@ -185,6 +198,16 @@ function applyTableTools() {
       row.classList.toggle("filtered-out", !visible);
       if (visible) shown += 1;
     });
+  });
+
+  const hasActiveFilter = Boolean(search) || filter !== "all";
+  document.querySelectorAll("details.product-group").forEach((group) => {
+    const rows = [...group.querySelectorAll("tr[data-filter-row]")];
+    const visible = rows.filter((row) => !row.classList.contains("filtered-out")).length;
+    const count = group.querySelector("[data-group-count]");
+    if (count) count.textContent = hasActiveFilter ? `${visible} з ${rows.length}` : productCountLabel(rows.length);
+    group.classList.toggle("has-no-matches", hasActiveFilter && visible === 0);
+    if (hasActiveFilter && visible > 0) group.open = true;
   });
 
   const meta = qs("#filter-meta");
@@ -216,20 +239,54 @@ function adminRow(section, row, index) {
   </tr>`;
 }
 
+function isUsedIphone(row) {
+  const name = String(row.jabko_name || "");
+  const url = String(row.jabko_url || "").toLowerCase();
+  return /^\s*б\s*\/\s*у\b/i.test(name)
+    || url.includes("/b-u-iphone/")
+    || url.includes("/bu-iphone");
+}
+
+function renderProductGroup(section, group, head, isAdmin) {
+  const rows = group.items
+    .map(({ row, index }) => isAdmin ? adminRow(section, row, index) : publicRow(row, index))
+    .join("");
+  return `<details class="product-group product-group-${group.key}" data-product-group="${group.key}">
+    <summary>
+      <span class="group-summary-left"><span class="group-title">${group.title}</span><span class="group-count" data-group-count>${productCountLabel(group.items.length)}</span></span>
+      <span class="group-caret" aria-hidden="true">⌄</span>
+    </summary>
+    <section class="table-shell group-table-shell">
+      <table class="${isAdmin ? "admin-table" : "public-table"}"><thead>${head}</thead><tbody data-filter-body="1">${rows}</tbody></table>
+    </section>
+  </details>`;
+}
+
 function renderSection(section, open, isAdmin) {
-  const rows = section.rows.map((row, index) => isAdmin ? adminRow(section, row, index) : publicRow(row, index)).join("");
   const head = isAdmin
     ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
     : `<tr><th class="num">#</th><th>Товар MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th></tr>`;
   const actions = isAdmin
     ? `<div class="section-actions"><button class="button" type="button" data-action="refresh-section" data-section="${section.key}">Оновити розділ</button><button class="button" type="button" data-action="add-row" data-section="${section.key}">Додати рядок</button></div>`
     : "";
-  return `<details class="section" ${open ? "open" : ""}>
-    <summary><span class="summary-left"><span class="summary-title">${escapeHtml(section.title)}</span><span class="summary-count">${section.rows.length} рядків</span></span><span>⌄</span></summary>
-    <section class="table-shell">
+  let content;
+  if (section.key === "iphone") {
+    const indexedRows = section.rows.map((row, index) => ({ row, index }));
+    const groups = [
+      { key: "used", title: "б/у iPhone", items: indexedRows.filter(({ row }) => isUsedIphone(row)) },
+      { key: "new", title: "NEW iPhone", items: indexedRows.filter(({ row }) => !isUsedIphone(row)) },
+    ];
+    content = `<div class="product-groups">${groups.map((group) => renderProductGroup(section, group, head, isAdmin)).join("")}${actions}</div>`;
+  } else {
+    const rows = section.rows.map((row, index) => isAdmin ? adminRow(section, row, index) : publicRow(row, index)).join("");
+    content = `<section class="table-shell">
       <table class="${isAdmin ? "admin-table" : "public-table"}"><thead>${head}</thead><tbody data-filter-body="1">${rows}</tbody></table>
       ${actions}
-    </section>
+    </section>`;
+  }
+  return `<details class="section" ${open ? "open" : ""}>
+    <summary><span class="summary-left"><span class="summary-title">${escapeHtml(section.title)}</span><span class="summary-count">${section.rows.length} рядків</span></span><span>⌄</span></summary>
+    ${content}
   </details>`;
 }
 

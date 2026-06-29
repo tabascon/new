@@ -164,6 +164,47 @@ details.section > summary::-webkit-details-marker { display: none; }
 }
 details.section[open] > summary { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-color: transparent; }
 details.section[open] .table-shell { border-top-left-radius: 0; border-top-right-radius: 0; }
+.product-groups {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+.product-group {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel);
+}
+.product-group > summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 54px;
+  padding: 12px 14px;
+  border-left: 4px solid var(--muted);
+  background: #fbfbf8;
+  cursor: pointer;
+}
+.product-group-new > summary { border-left-color: var(--accent); }
+.product-group > summary::-webkit-details-marker { display: none; }
+.product-group[open] > summary { border-bottom: 1px solid var(--line); }
+.group-summary-left { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.group-title { font-size: 15px; font-weight: 800; }
+.product-group-new .group-title { color: var(--accent-dark); }
+.group-count { color: var(--muted); font-size: 12px; font-weight: 700; }
+.group-caret { color: var(--muted); font-size: 17px; transition: transform 0.16s ease; }
+.product-group[open] .group-caret { transform: rotate(180deg); }
+.product-group.has-no-matches > summary { opacity: 0.55; }
+.group-table-shell { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+.product-groups > .section-actions { margin: 0 -12px -12px; }
 table { width: 100%; border-collapse: separate; border-spacing: 0; min-width: 960px; }
 th, td { border-bottom: 1px solid var(--line); padding: 12px; text-align: left; vertical-align: top; }
 th { background: #fbfbf8; font-size: 12px; color: #44443f; text-transform: uppercase; }
