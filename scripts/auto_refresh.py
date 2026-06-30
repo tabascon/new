@@ -3,6 +3,7 @@
 import base64
 import json
 import os
+import re
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -17,6 +18,7 @@ ADMIN_USER = os.environ["ADMIN_USER"]
 ADMIN_PASSWORD = os.environ["ADMIN_PASSWORD"]
 WORKERS = max(1, min(int(os.environ.get("REFRESH_WORKERS", "6")), 10))
 KYIV = ZoneInfo("Europe/Kyiv")
+SCHEDULED_SLOT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T(?:10|14|18):00$")
 
 
 def auth_header():
@@ -82,12 +84,22 @@ def due_slot(schedule, now_kyiv, last_auto_slot=""):
 
 def main():
     force = os.environ.get("FORCE_REFRESH", "").lower() in {"1", "true", "yes"}
+    scheduled_slot = os.environ.get("SCHEDULED_SLOT", "").strip()
     now_kyiv = datetime.now(KYIV)
 
     data = request_json("/api/data")
     meta = data.setdefault("meta", {})
 
-    if not force:
+    if scheduled_slot:
+        if not SCHEDULED_SLOT_PATTERN.fullmatch(scheduled_slot):
+            raise RuntimeError(f"Invalid scheduled slot: {scheduled_slot}")
+        if scheduled_slot > now_kyiv.strftime("%Y-%m-%dT%H:%M"):
+            raise RuntimeError(f"Scheduled slot is in the future: {scheduled_slot}")
+        if scheduled_slot <= str(meta.get("last_auto_slot", "")):
+            print(f"Skip: slot {scheduled_slot} has already been completed.")
+            return 0
+        slot = scheduled_slot
+    elif not force:
         schedule = request_json("/api/schedule")["schedule"]
         slot = due_slot(schedule, now_kyiv, str(meta.get("last_auto_slot", "")))
         if slot is None:

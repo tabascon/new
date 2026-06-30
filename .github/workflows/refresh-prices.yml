@@ -9,6 +9,11 @@ on:
     - cron: "8 10,14,18 * * *"
       timezone: "Europe/Kyiv"
   workflow_dispatch:
+    inputs:
+      scheduled_slot:
+        description: "Automatic slot in YYYY-MM-DDTHH:MM format"
+        required: false
+        type: string
 
 concurrency:
   group: price-refresh
@@ -27,5 +32,6 @@ jobs:
           ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
           PRICE_COMPARE_URL: https://new-4zc.pages.dev
           REFRESH_WORKERS: "6"
-          FORCE_REFRESH: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+          SCHEDULED_SLOT: ${{ inputs.scheduled_slot || '' }}
+          FORCE_REFRESH: ${{ github.event_name == 'workflow_dispatch' && inputs.scheduled_slot == '' && 'true' || 'false' }}
         run: python3 -u scripts/auto_refresh.py
