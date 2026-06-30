@@ -1,13 +1,6 @@
 name: Refresh all prices
 
 on:
-  schedule:
-    - cron: "0 10,14,18 * * *"
-      timezone: "Europe/Kyiv"
-    - cron: "3 10,14,18 * * *"
-      timezone: "Europe/Kyiv"
-    - cron: "8 10,14,18 * * *"
-      timezone: "Europe/Kyiv"
   workflow_dispatch:
     inputs:
       scheduled_slot:
