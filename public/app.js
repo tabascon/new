@@ -218,8 +218,8 @@ function publicRow(row, index) {
   return `<tr ${rowAttrs(row, index)}>
     <td class="num">${index + 1}</td>
     <td class="name-col mobile-product-name">${publicProductName(row)}</td>
-    <td class="price mobile-price mobile-jabko" data-mobile-label="Jabko">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
     <td class="price mobile-price mobile-mygadget" data-mobile-label="MyGadget">${linkedPrice(row.mygadget_price_uah, row.mygadget_url)}</td>
+    <td class="price mobile-price mobile-jabko" data-mobile-label="Jabko">${linkedPrice(row.jabko_price_uah, row.jabko_url)}</td>
     <td class="mobile-deviation" data-mobile-label="Відхилення">${deviationHtml(row)}</td>
   </tr>`;
 }
@@ -265,7 +265,7 @@ function renderProductGroup(section, group, head, isAdmin) {
 function renderSection(section, open, isAdmin) {
   const head = isAdmin
     ? `<tr><th class="num">#</th><th>Імʼя товару Jabko</th><th>URL товару Jabko</th><th>Імʼя товару MyGadget</th><th>URL товару MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th><th>Дії</th></tr>`
-    : `<tr><th class="num">#</th><th>Товар MyGadget</th><th>Jabko</th><th>MyGadget</th><th>Відхилення</th></tr>`;
+    : `<tr><th class="num">#</th><th>Товар MyGadget</th><th>MyGadget</th><th>Jabko</th><th>Відхилення</th></tr>`;
   const actions = isAdmin
     ? `<div class="section-actions"><button class="button" type="button" data-action="refresh-section" data-section="${section.key}">Оновити розділ</button><button class="button" type="button" data-action="add-row" data-section="${section.key}">Додати рядок</button></div>`
     : "";

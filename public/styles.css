@@ -298,7 +298,7 @@ tr.filtered-out { display: none; }
     grid-template-columns: minmax(0, 1fr) minmax(88px, auto) minmax(0, 1fr);
     grid-template-areas:
       "name name name"
-      "jabko deviation mygadget";
+      "mygadget deviation jabko";
     gap: 12px 8px;
     padding: 14px;
     border-bottom: 1px solid var(--line);
@@ -311,9 +311,9 @@ tr.filtered-out { display: none; }
   .public-table .copy-name-button { display: none; }
   .public-table .mobile-price,
   .public-table .mobile-deviation { display: flex; flex-direction: column; }
-  .public-table .mobile-jabko { grid-area: jabko; align-items: flex-start; }
+  .public-table .mobile-jabko { grid-area: jabko; align-items: flex-end; text-align: right; }
   .public-table .mobile-deviation { grid-area: deviation; align-items: center; text-align: center; }
-  .public-table .mobile-mygadget { grid-area: mygadget; align-items: flex-end; text-align: right; }
+  .public-table .mobile-mygadget { grid-area: mygadget; align-items: flex-start; }
   .public-table .mobile-price::before,
   .public-table .mobile-deviation::before {
     content: attr(data-mobile-label);
@@ -325,6 +325,6 @@ tr.filtered-out { display: none; }
     line-height: 1;
     text-transform: uppercase;
   }
-  .public-table .mobile-mygadget .price-stack { align-items: flex-end; }
+  .public-table .mobile-jabko .price-stack { align-items: flex-end; }
   .public-table .deviation { min-width: 0; padding: 4px 6px; font-size: 12px; }
 }
